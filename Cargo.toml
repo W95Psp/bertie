@@ -19,6 +19,7 @@ hex = "0.4.3"
 hacspec-lib = { git = "https://github.com/hacspec/hacspec", package = "hacspec-lib" }
 hacspec_cryptolib = { git = "https://github.com/cryspen/utils", optional = true, package = "hacspec_cryptolib" }
 evercrypt_cryptolib = { git = "https://github.com/cryspen/utils", optional = true, package = "evercrypt_cryptolib" }
+crypto_utils = { git = "https://github.com/cryspen/utils", package = "crypto_utils" }
 
 [features]
 default = ["hacspec"]

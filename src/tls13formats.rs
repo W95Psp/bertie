@@ -1,5 +1,6 @@
 // A module that for the formatting code needed by TLS 1.3
 // Import hacspec and all needed definitions.
+use crypto_utils::*;
 #[cfg(feature = "evercrypt")]
 use evercrypt_cryptolib::*;
 #[cfg(not(feature = "evercrypt"))]
