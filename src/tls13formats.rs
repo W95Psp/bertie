@@ -13,6 +13,35 @@ pub const PARSE_FAILED: u8 = 133u8;
 pub const UNSUPPORTED_ALGORITHM: u8 = 6u8;
 pub const PSK_MODE_MISMATCH: u8 = 131u8;
 
+type NameMeA = Result<Bytes, TLSError>;
+type NameMeB = Result<(), TLSError>;
+type NameMeC = Result<Option<Bytes>, TLSError>;
+type NameMeD = Result<EXTS, TLSError>;
+type NameMeZ = Result<(usize, EXTS), TLSError>;
+type NameMeE = Result<HandshakeType, TLSError>;
+type NameMeF = Result<AlertDescription, TLSError>;
+type NameMeG = Result<HandshakeData, TLSError>;
+type NameMeI = Result<(HandshakeData, HandshakeData), TLSError>;
+type NameMeJ = Result<(HandshakeData, HandshakeData), TLSError>;
+type NameMeK = Result<(HandshakeData, HandshakeData, HandshakeData, HandshakeData), TLSError>;
+type NameMeX = Result<(HandshakeData, usize), TLSError>;
+type NameMeY = Result<
+    (
+        Random,
+        Bytes,
+        Bytes,
+        Bytes,
+        Option<Bytes>,
+        Option<Bytes>,
+        usize,
+    ),
+    TLSError,
+>;
+type NameMeW = Result<(Random, KemPk), TLSError>;
+type NameMeV = Result<(U32, Bytes), TLSError>;
+type NameMeL = Result<ContentType, TLSError>;
+type NameMeN = Result<Digest, TLSError>;
+
 /// Well Known Constants
 
 // Hack...
@@ -69,37 +98,37 @@ const SHA256_EMPTY: Bytes32 = Bytes32(secret_bytes!([
 ]));
 */
 
-fn ciphersuite(algs: Algorithms) -> Result<Bytes, TLSError> {
+fn ciphersuite(algs: Algorithms) -> NameMeA {
     if hash_alg(algs.clone()) == HashAlgorithm::SHA256 {
         if aead_alg(algs.clone()) == AeadAlgorithm::Aes128Gcm {
-            Ok(bytes2(0x13u8, 0x01u8))
+            NameMeA::Ok(bytes2(0x13u8, 0x01u8))
         } else {
             if aead_alg(algs.clone()) == AeadAlgorithm::Chacha20Poly1305 {
-                Ok(bytes2(0x13u8, 0x03u8))
+                NameMeA::Ok(bytes2(0x13u8, 0x03u8))
             } else {
-                Err(UNSUPPORTED_ALGORITHM)
+                NameMeA::Err(UNSUPPORTED_ALGORITHM)
             }
         }
     } else {
-        Err(UNSUPPORTED_ALGORITHM)
+        NameMeA::Err(UNSUPPORTED_ALGORITHM)
     }
 }
 
-fn supported_group(algs: Algorithms) -> Result<Bytes, TLSError> {
+fn supported_group(algs: Algorithms) -> NameMeA {
     match kem_alg(algs) {
-        NamedGroup::X25519 => Ok(bytes2(0x00u8, 0x1Du8)),
-        NamedGroup::Secp256r1 => Ok(bytes2(0x00u8, 0x17u8)),
-        NamedGroup::X448 => Err(UNSUPPORTED_ALGORITHM),
-        NamedGroup::Secp384r1 => Err(UNSUPPORTED_ALGORITHM),
-        NamedGroup::Secp521r1 => Err(UNSUPPORTED_ALGORITHM),
+        NamedGroup::X25519 => NameMeA::Ok(bytes2(0x00u8, 0x1Du8)),
+        NamedGroup::Secp256r1 => NameMeA::Ok(bytes2(0x00u8, 0x17u8)),
+        NamedGroup::X448 => NameMeA::Err(UNSUPPORTED_ALGORITHM),
+        NamedGroup::Secp384r1 => NameMeA::Err(UNSUPPORTED_ALGORITHM),
+        NamedGroup::Secp521r1 => NameMeA::Err(UNSUPPORTED_ALGORITHM),
     }
 }
 
-fn signature_algorithm(algs: Algorithms) -> Result<Bytes, TLSError> {
+fn signature_algorithm(algs: Algorithms) -> NameMeA {
     match sig_alg(algs) {
-        SignatureScheme::RsaPssRsaSha256 => Ok(bytes2(0x08u8, 0x04u8)),
-        SignatureScheme::EcdsaSecp256r1Sha256 => Ok(bytes2(0x04u8, 0x03u8)),
-        SignatureScheme::ED25519 => Err(UNSUPPORTED_ALGORITHM),
+        SignatureScheme::RsaPssRsaSha256 => NameMeA::Ok(bytes2(0x08u8, 0x04u8)),
+        SignatureScheme::EcdsaSecp256r1Sha256 => NameMeA::Ok(bytes2(0x04u8, 0x03u8)),
+        SignatureScheme::ED25519 => NameMeA::Err(UNSUPPORTED_ALGORITHM),
     }
 }
 
@@ -108,113 +137,113 @@ fn check_ciphersuites(algs: Algorithms, b: &ByteSeq) -> Result<usize, TLSError> 
     let cs = ciphersuite(algs)?;
     let csl = b.slice_range(2..2 + len);
     check_mem(&cs, &csl)?;
-    Ok(len + 2)
+    Result::<usize, TLSError>::Ok(len + 2)
 }
 
-fn server_name(sn: &ByteSeq) -> Result<Bytes, TLSError> {
+fn server_name(sn: &ByteSeq) -> NameMeA {
     let c = lbytes2(sn)?;
     let b = lbytes2(&bytes1(0).concat(&c))?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0u8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0u8).concat(&a))
 }
 
-fn check_server_name(ext: &ByteSeq) -> Result<Bytes, TLSError> {
+fn check_server_name(ext: &ByteSeq) -> NameMeA {
     check_lbytes2_full(ext)?;
     check_eq(&bytes1(0), &ext.slice_range(2..3))?;
     check_lbytes2_full(&ext.slice_range(3..ext.len()))?;
-    Ok(ext.slice_range(5..ext.len()))
+    NameMeA::Ok(ext.slice_range(5..ext.len()))
 }
 
-fn supported_versions(_algs: Algorithms) -> Result<Bytes, TLSError> {
+fn supported_versions(_algs: Algorithms) -> NameMeA {
     let b = lbytes1(&bytes2(3u8, 4u8))?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0x2bu8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x2bu8).concat(&a))
 }
 
-fn check_supported_versions(_algs: Algorithms, ch: &ByteSeq) -> Result<(), TLSError> {
+fn check_supported_versions(_algs: Algorithms, ch: &ByteSeq) -> NameMeB {
     check_lbytes1_full(ch)?;
     check_mem(&bytes2(3u8, 4u8), &ch.slice_range(1..ch.len()))
 }
 
-fn server_supported_version(_algs: Algorithms) -> Result<Bytes, TLSError> {
+fn server_supported_version(_algs: Algorithms) -> NameMeA {
     let a = lbytes2(&bytes2(3u8, 4u8))?;
-    Ok(bytes2(0u8, 0x2bu8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x2bu8).concat(&a))
 }
 
-fn check_server_supported_version(_algs: Algorithms, b: &ByteSeq) -> Result<(), TLSError> {
+fn check_server_supported_version(_algs: Algorithms, b: &ByteSeq) -> NameMeB {
     check_eq(&bytes2(3u8, 4u8), b)
 }
 
-fn supported_groups(algs: Algorithms) -> Result<Bytes, TLSError> {
+fn supported_groups(algs: Algorithms) -> NameMeA {
     let c = supported_group(algs)?;
     let b = lbytes2(&c)?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0x0au8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x0au8).concat(&a))
 }
 
-fn check_supported_groups(algs: Algorithms, ch: &ByteSeq) -> Result<(), TLSError> {
+fn check_supported_groups(algs: Algorithms, ch: &ByteSeq) -> NameMeB {
     check_lbytes2_full(ch)?;
     let a = supported_group(algs)?;
     check_mem(&a, &ch.slice_range(2..ch.len()))
 }
 
-fn signature_algorithms(algs: Algorithms) -> Result<Bytes, TLSError> {
+fn signature_algorithms(algs: Algorithms) -> NameMeA {
     let c = signature_algorithm(algs)?;
     let b = lbytes2(&c)?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0x0du8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x0du8).concat(&a))
 }
 
-fn check_signature_algorithms(algs: Algorithms, ch: &ByteSeq) -> Result<(), TLSError> {
+fn check_signature_algorithms(algs: Algorithms, ch: &ByteSeq) -> NameMeB {
     check_lbytes2_full(ch)?;
     let a = signature_algorithm(algs)?;
     check_mem(&a, &ch.slice_range(2..ch.len()))
 }
 
-pub fn psk_key_exchange_modes(_algs: Algorithms) -> Result<Bytes, TLSError> {
+pub fn psk_key_exchange_modes(_algs: Algorithms) -> NameMeA {
     let b = lbytes1(&bytes1(1))?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0x2du8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x2du8).concat(&a))
 }
 
-pub fn check_psk_key_exchange_modes(_algs: Algorithms, ch: &ByteSeq) -> Result<(), TLSError> {
+pub fn check_psk_key_exchange_modes(_algs: Algorithms, ch: &ByteSeq) -> NameMeB {
     check_lbytes1_full(ch)?;
     check_eq(&bytes1(1), &ch.slice_range(1..2))
 }
 
-pub fn key_shares(algs: Algorithms, gx: &KemPk) -> Result<Bytes, TLSError> {
+pub fn key_shares(algs: Algorithms, gx: &KemPk) -> NameMeA {
     let b = supported_group(algs)?;
     let a = lbytes2(&gx)?;
     let ks = b.concat(&a);
 
     let b = lbytes2(&ks)?;
     let a = lbytes2(&b)?;
-    Ok(bytes2(0u8, 0x33u8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x33u8).concat(&a))
 }
 
-pub fn check_key_share(algs: Algorithms, ch: &ByteSeq) -> Result<Bytes, TLSError> {
+pub fn check_key_share(algs: Algorithms, ch: &ByteSeq) -> NameMeA {
     check_lbytes2_full(ch)?;
 
     let a = supported_group(algs)?;
     check_eq(&a, &ch.slice_range(2..4))?;
     check_lbytes2_full(&ch.slice_range(4..ch.len()))?;
-    Ok(ch.slice_range(6..ch.len()))
+    NameMeA::Ok(ch.slice_range(6..ch.len()))
 }
 
-pub fn server_key_shares(algs: Algorithms, gx: &KemPk) -> Result<Bytes, TLSError> {
+pub fn server_key_shares(algs: Algorithms, gx: &KemPk) -> NameMeA {
     let b = supported_group(algs)?;
     let a = lbytes2(&gx)?;
     let ks = b.concat(&a);
 
     let a = lbytes2(&ks)?;
-    Ok(bytes2(0u8, 0x33u8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 0x33u8).concat(&a))
 }
 
-pub fn check_server_key_share(algs: Algorithms, b: &ByteSeq) -> Result<Bytes, TLSError> {
+pub fn check_server_key_share(algs: Algorithms, b: &ByteSeq) -> NameMeA {
     let a = supported_group(algs)?;
     check_eq(&a, &b.slice_range(0..2))?;
     check_lbytes2_full(&b.slice_range(2..b.len()))?;
-    Ok(b.slice_range(4..b.len()))
+    NameMeA::Ok(b.slice_range(4..b.len()))
 }
 
 pub fn pre_shared_key(algs: Algorithms, tkt: &ByteSeq) -> Result<(Bytes, usize), TLSError> {
@@ -226,31 +255,31 @@ pub fn pre_shared_key(algs: Algorithms, tkt: &ByteSeq) -> Result<(Bytes, usize),
 
     let a = lbytes2(&identities.concat(&binders))?;
     let ext = bytes2(0u8, 41u8).concat(&a);
-    Ok((ext, binders.len()))
+    Result::<(Bytes, usize), TLSError>::Ok((ext, binders.len()))
 }
 
-pub fn check_psk_shared_key(_algs: Algorithms, ch: &ByteSeq) -> Result<(), TLSError> {
+pub fn check_psk_shared_key(_algs: Algorithms, ch: &ByteSeq) -> NameMeB {
     let len_id = check_lbytes2(ch)?;
     let len_tkt = check_lbytes2(&ch.slice_range(2..2 + len_id))?;
     if len_id == len_tkt + 6 {
         check_lbytes2_full(&ch.slice_range(2 + len_id..ch.len()))?;
         check_lbytes1_full(&ch.slice_range(4 + len_id..ch.len()))?;
         if ch.len() - 6 - len_id != 32 {
-            Err(PARSE_FAILED)
+            NameMeB::Err(PARSE_FAILED)
         } else {
-            Ok(())
+            NameMeB::Ok(())
         }
     } else {
-        Err(PARSE_FAILED)
+        NameMeB::Err(PARSE_FAILED)
     }
 }
 
-pub fn server_pre_shared_key(_algs: Algorithms) -> Result<Bytes, TLSError> {
+pub fn server_pre_shared_key(_algs: Algorithms) -> NameMeA {
     let a = lbytes2(&bytes2(0u8, 0u8))?;
-    Ok(bytes2(0u8, 41u8).concat(&a))
+    NameMeA::Ok(bytes2(0u8, 41u8).concat(&a))
 }
 
-pub fn check_server_psk_shared_key(_algs: Algorithms, b: &ByteSeq) -> Result<(), TLSError> {
+pub fn check_server_psk_shared_key(_algs: Algorithms, b: &ByteSeq) -> NameMeB {
     check_eq(&bytes2(0u8, 0u8), b)
 }
 
@@ -261,20 +290,20 @@ pub struct EXTS(
     pub Option<Bytes>, //Binder
 );
 
-pub fn merge_opts(o1: Option<Bytes>, o2: Option<Bytes>) -> Result<Option<Bytes>, TLSError> {
+pub fn merge_opts(o1: Option<Bytes>, o2: Option<Bytes>) -> NameMeC {
     match o1 {
         Option::Some(o1) => match o2 {
-            Option::Some(o2) => Err(PARSE_FAILED),
-            Option::None => Ok(Some(o1)),
+            Option::Some(o2) => NameMeC::Err(PARSE_FAILED),
+            Option::None => NameMeC::Ok(Some(o1)),
         },
         Option::None => match o2 {
-            Option::Some(o2) => Ok(Some(o2)),
-            Option::None => Ok(Option::None),
+            Option::Some(o2) => NameMeC::Ok(Some(o2)),
+            Option::None => NameMeC::Ok(Option::None),
         },
     }
 }
 
-pub fn merge_exts(e1: EXTS, e2: EXTS) -> Result<EXTS, TLSError> {
+pub fn merge_exts(e1: EXTS, e2: EXTS) -> NameMeD {
     let EXTS(sn1, ks1, tkt1, bd1) = e1;
     let EXTS(sn2, ks2, tkt2, bd2) = e2;
 
@@ -282,10 +311,10 @@ pub fn merge_exts(e1: EXTS, e2: EXTS) -> Result<EXTS, TLSError> {
     let b = merge_opts(ks1, ks2)?;
     let c = merge_opts(tkt1, tkt2)?;
     let d = merge_opts(bd1, bd2)?;
-    Ok(EXTS(a, b, c, d))
+    NameMeD::Ok(EXTS(a, b, c, d))
 }
 
-fn check_extension(algs: Algorithms, b: &ByteSeq) -> Result<(usize, EXTS), TLSError> {
+fn check_extension(algs: Algorithms, b: &ByteSeq) -> NameMeZ {
     let l0 = (b[0] as U8).declassify() as usize;
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
@@ -323,7 +352,7 @@ fn check_extension(algs: Algorithms, b: &ByteSeq) -> Result<(usize, EXTS), TLSEr
         }
     }
 
-    Ok((4 + len, out))
+    NameMeZ::Ok((4 + len, out))
 }
 
 pub fn check_server_extension(
@@ -350,23 +379,23 @@ pub fn check_server_extension(
         }
     }
 
-    Ok((4 + len, out))
+    Result::<(usize, Option<Bytes>), TLSError>::Ok((4 + len, out))
 }
 
-fn check_extensions(algs: Algorithms, b: &ByteSeq) -> Result<EXTS, TLSError> {
+fn check_extensions(algs: Algorithms, b: &ByteSeq) -> NameMeD {
     let (len, out) = check_extension(algs, b)?;
     if len == b.len() {
-        Ok(out)
+        NameMeD::Ok(out)
     } else {
         let out_rest = check_extensions(algs, &b.slice_range(len..b.len()))?;
         merge_exts(out, out_rest)
     }
 }
 
-pub fn check_server_extensions(algs: Algorithms, b: &ByteSeq) -> Result<Option<Bytes>, TLSError> {
+pub fn check_server_extensions(algs: Algorithms, b: &ByteSeq) -> NameMeC {
     let (len, out) = check_server_extension(algs, b)?;
     if len == b.len() {
-        Ok(out)
+        NameMeC::Ok(out)
     } else {
         let out_rest = check_server_extensions(algs, &b.slice_range(len..b.len()))?;
         merge_opts(out, out_rest)
@@ -423,39 +452,39 @@ pub fn hs_type(t: HandshakeType) -> u8 {
 pub fn get_hs_type(t: u8) -> Result<HandshakeType, TLSError> {
     // TODO: Support mechanical transformation of `else if` into `else { if }`?
     if t == 1 {
-        Ok(HandshakeType::ClientHello)
+        NameMeE::Ok(HandshakeType::ClientHello)
     } else {
         if t == 2 {
-            Ok(HandshakeType::ServerHello)
+            NameMeE::Ok(HandshakeType::ServerHello)
         } else {
             if t == 4 {
-                Ok(HandshakeType::NewSessionTicket)
+                NameMeE::Ok(HandshakeType::NewSessionTicket)
             } else {
                 if t == 5 {
-                    Ok(HandshakeType::EndOfEarlyData)
+                    NameMeE::Ok(HandshakeType::EndOfEarlyData)
                 } else {
                     if t == 8 {
-                        Ok(HandshakeType::EncryptedExtensions)
+                        NameMeE::Ok(HandshakeType::EncryptedExtensions)
                     } else {
                         if t == 11 {
-                            Ok(HandshakeType::Certificate)
+                            NameMeE::Ok(HandshakeType::Certificate)
                         } else {
                             if t == 13 {
-                                Ok(HandshakeType::CertificateRequest)
+                                NameMeE::Ok(HandshakeType::CertificateRequest)
                             } else {
                                 if t == 15 {
-                                    Ok(HandshakeType::CertificateVerify)
+                                    NameMeE::Ok(HandshakeType::CertificateVerify)
                                 } else {
                                     if t == 20 {
-                                        Ok(HandshakeType::Finished)
+                                        NameMeE::Ok(HandshakeType::Finished)
                                     } else {
                                         if t == 24 {
-                                            Ok(HandshakeType::KeyUpdate)
+                                            NameMeE::Ok(HandshakeType::KeyUpdate)
                                         } else {
                                             if t == 254 {
-                                                Ok(HandshakeType::MessageHash)
+                                                NameMeE::Ok(HandshakeType::MessageHash)
                                             } else {
-                                                Err(PARSE_FAILED)
+                                                NameMeE::Err(PARSE_FAILED)
                                             }
                                         }
                                     }
@@ -496,15 +525,17 @@ pub fn alert_level(t: AlertLevel) -> u8 {
     }
 }
 
-pub fn get_alert_level(t: u8) -> Result<AlertLevel, TLSError> {
+type RENameMeH = Result<AlertLevel, TLSError>;
+
+pub fn get_alert_level(t: u8) -> RENameMeH {
     // TODO: Support mechanical transformation of `else if` into `else { if }`?
     if t == 1 {
-        Ok(AlertLevel::Warning)
+        RENameMeH::Ok(AlertLevel::Warning)
     } else {
         if t == 2 {
-            Ok(AlertLevel::Fatal)
+            RENameMeH::Ok(AlertLevel::Fatal)
         } else {
-            Err(PARSE_FAILED)
+            RENameMeH::Err(PARSE_FAILED)
         }
     }
 }
@@ -603,92 +634,96 @@ pub fn alert_description(t: AlertDescription) -> u8 {
     }
 }
 
-pub fn get_alert_description(t: u8) -> Result<AlertDescription, TLSError> {
+pub fn get_alert_description(t: u8) -> NameMeF {
     // Here comes a beautiful waterfall <3
     // TODO: Support mechanical transformation of `else if` into `else { if }`?
     if t == 0 {
-        Ok(AlertDescription::CloseNotify)
+        NameMeF::Ok(AlertDescription::CloseNotify)
     } else {
         if t == 10 {
-            Ok(AlertDescription::UnexpectedMessage)
+            NameMeF::Ok(AlertDescription::UnexpectedMessage)
         } else {
             if t == 20 {
-                Ok(AlertDescription::BadRecordMac)
+                NameMeF::Ok(AlertDescription::BadRecordMac)
             } else {
                 if t == 22 {
-                    Ok(AlertDescription::RecordOverflow)
+                    NameMeF::Ok(AlertDescription::RecordOverflow)
                 } else {
                     if t == 40 {
-                        Ok(AlertDescription::HandshakeFailure)
+                        NameMeF::Ok(AlertDescription::HandshakeFailure)
                     } else {
                         if t == 42 {
-                            Ok(AlertDescription::BadCertificate)
+                            NameMeF::Ok(AlertDescription::BadCertificate)
                         } else {
                             if t == 43 {
-                                Ok(AlertDescription::UnsupportedCertificate)
+                                NameMeF::Ok(AlertDescription::UnsupportedCertificate)
                             } else {
                                 if t == 44 {
-                                    Ok(AlertDescription::CertificateRevoked)
+                                    NameMeF::Ok(AlertDescription::CertificateRevoked)
                                 } else {
                                     if t == 45 {
-                                        Ok(AlertDescription::CertificateExpired)
+                                        NameMeF::Ok(AlertDescription::CertificateExpired)
                                     } else {
                                         if t == 46 {
-                                            Ok(AlertDescription::CertificateUnknown)
+                                            NameMeF::Ok(AlertDescription::CertificateUnknown)
                                         } else {
                                             if t == 47 {
-                                                Ok(AlertDescription::IllegalParameter)
+                                                NameMeF::Ok(AlertDescription::IllegalParameter)
                                             } else {
                                                 if t == 48 {
-                                                    Ok(AlertDescription::UnknownCa)
+                                                    NameMeF::Ok(AlertDescription::UnknownCa)
                                                 } else {
                                                     if t == 49 {
-                                                        Ok(AlertDescription::AccessDenied)
+                                                        NameMeF::Ok(AlertDescription::AccessDenied)
                                                     } else {
                                                         if t == 50 {
-                                                            Ok(AlertDescription::DecodeError)
+                                                            NameMeF::Ok(
+                                                                AlertDescription::DecodeError,
+                                                            )
                                                         } else {
                                                             if t == 51 {
-                                                                Ok(AlertDescription::DecryptError)
+                                                                NameMeF::Ok(
+                                                                    AlertDescription::DecryptError,
+                                                                )
                                                             } else {
                                                                 if t == 70 {
-                                                                    Ok(AlertDescription::ProtocolVersion)
+                                                                    NameMeF::Ok(AlertDescription::ProtocolVersion)
                                                                 } else {
                                                                     if t == 71 {
-                                                                        Ok(AlertDescription::InsufficientSecurity)
+                                                                        NameMeF::Ok(AlertDescription::InsufficientSecurity)
                                                                     } else {
                                                                         if t == 80 {
-                                                                            Ok(AlertDescription::InternalError)
+                                                                            NameMeF::Ok(AlertDescription::InternalError)
                                                                         } else {
                                                                             if t == 86 {
-                                                                                Ok(AlertDescription::InappropriateFallback)
+                                                                                NameMeF::Ok(AlertDescription::InappropriateFallback)
                                                                             } else {
                                                                                 if t == 90 {
-                                                                                    Ok(AlertDescription::UserCanceled)
+                                                                                    NameMeF::Ok(AlertDescription::UserCanceled)
                                                                                 } else {
                                                                                     if t == 109 {
-                                                                                        Ok(AlertDescription::MissingExtension)
+                                                                                        NameMeF::Ok(AlertDescription::MissingExtension)
                                                                                     } else {
                                                                                         if t == 110
                                                                                         {
-                                                                                            Ok(AlertDescription::UnsupportedExtension)
+                                                                                            NameMeF::Ok(AlertDescription::UnsupportedExtension)
                                                                                         } else {
                                                                                             if t == 112 {
-                                                                                                Ok(AlertDescription::UnrecognizedName)
+                                                                                                NameMeF::Ok(AlertDescription::UnrecognizedName)
                                                                                             } else {
                                                                                                 if t == 113 {
-                                                                                                    Ok(AlertDescription::BadCertificateStatusResponse)
+                                                                                                    NameMeF::Ok(AlertDescription::BadCertificateStatusResponse)
                                                                                                 } else {
                                                                                                     if t == 115 {
-                                                                                                        Ok(AlertDescription::UnknownPskIdentity)
+                                                                                                        NameMeF::Ok(AlertDescription::UnknownPskIdentity)
                                                                                                     } else {
                                                                                                         if t == 116 {
-                                                                                                            Ok(AlertDescription::CertificateRequired)
+                                                                                                            NameMeF::Ok(AlertDescription::CertificateRequired)
                                                                                                         } else {
                                                                                                             if t == 120 {
-                                                                                                                Ok(AlertDescription::NoApplicationProtocol)
+                                                                                                                NameMeF::Ok(AlertDescription::NoApplicationProtocol)
                                                                                                             } else {
-                                                                                                                Err(PARSE_FAILED)
+                                                                                                                NameMeF::Err(PARSE_FAILED)
                                                                                                             }
                                                                                                         }
                                                                                                     }
@@ -720,66 +755,58 @@ pub fn get_alert_description(t: u8) -> Result<AlertDescription, TLSError> {
 
 // Tagged Handshake Data
 
-pub fn handshake_message(ty: HandshakeType, by: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn handshake_message(ty: HandshakeType, by: &ByteSeq) -> NameMeG {
     let a = lbytes3(by)?;
-    Ok(handshake_data(bytes1(hs_type(ty)).concat(&a)))
+    NameMeG::Ok(handshake_data(bytes1(hs_type(ty)).concat(&a)))
 }
 
-pub fn get_first_handshake_message(
-    p: &HandshakeData,
-) -> Result<(HandshakeData, HandshakeData), TLSError> {
+pub fn get_first_handshake_message(p: &HandshakeData) -> NameMeI {
     let p = handshake_data_bytes(p);
     if p.len() < 4 {
-        Err(PARSE_FAILED)
+        NameMeI::Err(PARSE_FAILED)
     } else {
         let len = check_lbytes3(&p.slice_range(1..p.len()))?;
         let msg = p.slice_range(0..4 + len);
         let rest = p.slice_range(4 + len..p.len());
-        Ok((HandshakeData(msg), HandshakeData(rest)))
+        NameMeI::Ok((HandshakeData(msg), HandshakeData(rest)))
     }
 }
 
-pub fn get_handshake_message(p: &HandshakeData) -> Result<HandshakeData, TLSError> {
+pub fn get_handshake_message(p: &HandshakeData) -> NameMeG {
     let (m1, p) = get_first_handshake_message(p)?;
     if handshake_data_len(&p) != 0 {
-        Err(PARSE_FAILED)
+        NameMeG::Err(PARSE_FAILED)
     } else {
-        Ok(m1)
+        NameMeG::Ok(m1)
     }
 }
 
-pub fn get_handshake_message_ty(
-    ty: HandshakeType,
-    p: &HandshakeData,
-) -> Result<HandshakeData, TLSError> {
+pub fn get_handshake_message_ty(ty: HandshakeType, p: &HandshakeData) -> NameMeG {
     let HandshakeData(m) = get_handshake_message(p)?;
     let tyb = bytes1(hs_type(ty));
     check_eq(&tyb, &m.slice_range(0..1))?;
-    Ok(HandshakeData(m.slice_range(4..m.len())))
+    NameMeG::Ok(HandshakeData(m.slice_range(4..m.len())))
 }
 
-pub fn get_handshake_messages2(
-    p: &HandshakeData,
-) -> Result<(HandshakeData, HandshakeData), TLSError> {
+pub fn get_handshake_messages2(p: &HandshakeData) -> NameMeJ {
     let (m1, p) = get_first_handshake_message(p)?;
     let (m2, p) = get_first_handshake_message(&p)?;
     if handshake_data_len(&p) != 0 {
-        Err(PARSE_FAILED)
+        NameMeJ::Err(PARSE_FAILED)
     } else {
-        Ok((m1, m2))
+        NameMeJ::Ok((m1, m2))
     }
 }
-pub fn get_handshake_messages4(
-    p: &HandshakeData,
-) -> Result<(HandshakeData, HandshakeData, HandshakeData, HandshakeData), TLSError> {
+
+pub fn get_handshake_messages4(p: &HandshakeData) -> NameMeK {
     let (m1, p) = get_first_handshake_message(p)?;
     let (m2, p) = get_first_handshake_message(&p)?;
     let (m3, p) = get_first_handshake_message(&p)?;
     let (m4, p) = get_first_handshake_message(&p)?;
     if handshake_data_len(&p) != 0 {
-        Err(PARSE_FAILED)
+        NameMeK::Err(PARSE_FAILED)
     } else {
-        Ok((m1, m2, m3, m4))
+        NameMeK::Ok((m1, m2, m3, m4))
     }
 }
 
@@ -789,7 +816,7 @@ pub fn find_handshake_message(ty: HandshakeType, payload: &HandshakeData, start:
         false
     } else {
         match check_lbytes3(&p.slice_range(start + 1..p.len())) {
-            Result::Ok(len) => {
+            Result::<usize, u8>::Ok(len) => {
                 if eq1(p[start], U8(hs_type(ty))) {
                     true
                 } else {
@@ -807,7 +834,7 @@ pub fn client_hello(
     gx: &KemPk,
     sn: &ByteSeq,
     tkt: &Option<Bytes>,
-) -> Result<(HandshakeData, usize), TLSError> {
+) -> NameMeX {
     let ver = bytes2(3u8, 3u8);
     let sid = lbytes1(&ByteSeq::new(32))?;
 
@@ -830,7 +857,7 @@ pub fn client_hello(
         trunc_len = len;
     } else {
         if tkt.is_some() {
-            Err(PSK_MODE_MISMATCH)?;
+            NameMeX::Err(PSK_MODE_MISMATCH)?;
         }
     }
 
@@ -843,7 +870,7 @@ pub fn client_hello(
             .concat(&comp)
             .concat(&a),
     )?;
-    Ok((ch, trunc_len))
+    NameMeX::Ok((ch, trunc_len))
 }
 
 pub fn set_client_hello_binder(
@@ -851,7 +878,7 @@ pub fn set_client_hello_binder(
     binder: &Option<HMAC>,
     ch: HandshakeData,
     trunc_len: Option<usize>,
-) -> Result<HandshakeData, TLSError> {
+) -> NameMeG {
     let HandshakeData(ch) = ch;
     let chlen = ch.len();
     let hlen = hash_len(&hash_alg(algs));
@@ -860,35 +887,21 @@ pub fn set_client_hello_binder(
         Option::Some(binder) => match trunc_len {
             Option::Some(trunc_len) => {
                 if chlen - hlen == trunc_len {
-                    Ok(HandshakeData(ch.update_slice(trunc_len, binder, 0, hlen)))
+                    NameMeG::Ok(HandshakeData(ch.update_slice(trunc_len, binder, 0, hlen)))
                 } else {
-                    Err(PARSE_FAILED)
+                    NameMeG::Err(PARSE_FAILED)
                 }
             }
-            Option::None => Err(PARSE_FAILED),
+            Option::None => NameMeG::Err(PARSE_FAILED),
         },
         Option::None => match trunc_len {
-            Option::Some(trunc_len) => Err(PARSE_FAILED),
-            Option::None => Ok(HandshakeData(ch)),
+            Option::Some(trunc_len) => NameMeG::Err(PARSE_FAILED),
+            Option::None => NameMeG::Ok(HandshakeData(ch)),
         },
     }
 }
 
-pub fn parse_client_hello(
-    algs: Algorithms,
-    ch: &HandshakeData,
-) -> Result<
-    (
-        Random,
-        Bytes,
-        Bytes,
-        Bytes,
-        Option<Bytes>,
-        Option<Bytes>,
-        usize,
-    ),
-    TLSError,
-> {
+pub fn parse_client_hello(algs: Algorithms, ch: &HandshakeData) -> NameMeY {
     let HandshakeData(ch) = get_handshake_message_ty(HandshakeType::ClientHello, ch)?;
     let ver = bytes2(3u8, 3u8);
     let comp = bytes2(1u8, 0u8);
@@ -915,7 +928,7 @@ pub fn parse_client_hello(
             Option::Some(sn) => match gx {
                 Option::Some(gx) => match tkt {
                     Option::Some(tkt) => match binder {
-                        Option::Some(binder) => Ok((
+                        Option::Some(binder) => NameMeY::Ok((
                             Random::from_seq(&crand),
                             sid,
                             sn,
@@ -924,22 +937,22 @@ pub fn parse_client_hello(
                             Some(binder),
                             trunc_len,
                         )),
-                        Option::None => Err(PARSE_FAILED),
+                        Option::None => NameMeY::Err(PARSE_FAILED),
                     },
-                    Option::None => Err(PARSE_FAILED),
+                    Option::None => NameMeY::Err(PARSE_FAILED),
                 },
-                Option::None => Err(PARSE_FAILED),
+                Option::None => NameMeY::Err(PARSE_FAILED),
             },
-            Option::None => Err(PARSE_FAILED),
+            Option::None => NameMeY::Err(PARSE_FAILED),
         }
     } else {
         match sn {
             Option::Some(sn) => match gx {
                 Option::Some(gx) => match tkt {
-                    Option::Some(tkt) => Err(PARSE_FAILED),
+                    Option::Some(tkt) => NameMeY::Err(PARSE_FAILED),
                     Option::None => match binder {
-                        Option::Some(binder) => Err(PARSE_FAILED),
-                        Option::None => Ok((
+                        Option::Some(binder) => NameMeY::Err(PARSE_FAILED),
+                        Option::None => NameMeY::Ok((
                             Random::from_seq(&crand),
                             sid,
                             sn,
@@ -950,19 +963,14 @@ pub fn parse_client_hello(
                         )),
                     },
                 },
-                Option::None => Err(PARSE_FAILED),
+                Option::None => NameMeY::Err(PARSE_FAILED),
             },
-            Option::None => Err(PARSE_FAILED),
+            Option::None => NameMeY::Err(PARSE_FAILED),
         }
     }
 }
 
-pub fn server_hello(
-    algs: Algorithms,
-    sr: &Random,
-    sid: &ByteSeq,
-    gy: &KemPk,
-) -> Result<HandshakeData, TLSError> {
+pub fn server_hello(algs: Algorithms, sr: &Random, sid: &ByteSeq, gy: &KemPk) -> NameMeG {
     let ver = bytes2(3u8, 3u8);
     let sid = lbytes1(sid)?;
     let cip = ciphersuite(algs)?;
@@ -983,13 +991,10 @@ pub fn server_hello(
             .concat(&comp)
             .concat(&a),
     )?;
-    Ok(sh)
+    NameMeG::Ok(sh)
 }
 
-pub fn parse_server_hello(
-    algs: Algorithms,
-    sh: &HandshakeData,
-) -> Result<(Random, KemPk), TLSError> {
+pub fn parse_server_hello(algs: Algorithms, sh: &HandshakeData) -> NameMeW {
     let HandshakeData(sh) = get_handshake_message_ty(HandshakeType::ServerHello, sh)?;
     let ver = bytes2(3u8, 3u8);
     let cip = ciphersuite(algs)?;
@@ -1010,26 +1015,26 @@ pub fn parse_server_hello(
     let gy = check_server_extensions(algs, &sh.slice_range(next..sh.len()))?;
 
     match gy {
-        Option::Some(gy) => Ok((Random::from_seq(&srand), gy)),
-        Option::None => Err(UNSUPPORTED_ALGORITHM),
+        Option::Some(gy) => NameMeW::Ok((Random::from_seq(&srand), gy)),
+        Option::None => NameMeW::Err(UNSUPPORTED_ALGORITHM),
     }
 }
 
-pub fn encrypted_extensions(_algs: Algorithms) -> Result<HandshakeData, TLSError> {
+pub fn encrypted_extensions(_algs: Algorithms) -> NameMeG {
     let ty = bytes1(hs_type(HandshakeType::EncryptedExtensions));
 
     let a = lbytes3(&empty())?;
-    Ok(HandshakeData(ty.concat(&a)))
+    NameMeG::Ok(HandshakeData(ty.concat(&a)))
 }
 
-pub fn parse_encrypted_extensions(_algs: Algorithms, ee: &HandshakeData) -> Result<(), TLSError> {
+pub fn parse_encrypted_extensions(_algs: Algorithms, ee: &HandshakeData) -> NameMeB {
     let HandshakeData(ee) = ee;
     let ty = bytes1(hs_type(HandshakeType::EncryptedExtensions));
     check_eq(&ty, &ee.slice_range(0..1))?;
     check_lbytes3_full(&ee.slice_range(1..ee.len()))
 }
 
-pub fn server_certificate(_algs: Algorithms, cert: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn server_certificate(_algs: Algorithms, cert: &ByteSeq) -> NameMeG {
     let creq = lbytes1(&empty())?;
     let crt = lbytes3(cert)?;
     let ext = lbytes2(&empty())?;
@@ -1037,7 +1042,7 @@ pub fn server_certificate(_algs: Algorithms, cert: &ByteSeq) -> Result<Handshake
     handshake_message(HandshakeType::Certificate, &creq.concat(&crts))
 }
 
-pub fn parse_server_certificate(_algs: Algorithms, sc: &HandshakeData) -> Result<Bytes, TLSError> {
+pub fn parse_server_certificate(_algs: Algorithms, sc: &HandshakeData) -> NameMeA {
     let HandshakeData(sc) = get_handshake_message_ty(HandshakeType::Certificate, sc)?;
     let mut next = 0;
     let creqlen = check_lbytes1(&sc.slice_range(4..sc.len()))?;
@@ -1049,12 +1054,12 @@ pub fn parse_server_certificate(_algs: Algorithms, sc: &HandshakeData) -> Result
     let crt = sc.slice_range(next..next + crtlen);
     next = next + crtlen;
     let _extlen = check_lbytes2(&sc.slice_range(next..sc.len()))?;
-    Ok(crt)
+    NameMeA::Ok(crt)
 }
 
-fn ecdsa_signature(sv: &ByteSeq) -> Result<Bytes, TLSError> {
+fn ecdsa_signature(sv: &ByteSeq) -> NameMeA {
     if sv.len() != 64 {
-        Err(PARSE_FAILED)
+        NameMeA::Err(PARSE_FAILED)
     } else {
         let b0 = bytes1(0x0);
         let b1 = bytes1(0x30);
@@ -1071,13 +1076,13 @@ fn ecdsa_signature(sv: &ByteSeq) -> Result<Bytes, TLSError> {
         let c = lbytes1(&r)?;
         let b = lbytes1(&s)?;
         let a = lbytes1(&b2.concat(&c).concat(&b2).concat(&b))?;
-        Ok(b1.concat(&a))
+        NameMeA::Ok(b1.concat(&a))
     }
 }
 
-fn parse_ecdsa_signature(sig: Bytes) -> Result<Bytes, TLSError> {
+fn parse_ecdsa_signature(sig: Bytes) -> NameMeA {
     if sig.len() < 4 {
-        Err(PARSE_FAILED)
+        NameMeA::Err(PARSE_FAILED)
     } else {
         check_eq(&bytes1(0x30), &sig.slice_range(0..1))?;
         check_lbytes1_full(&sig.slice_range(1..sig.len()))?;
@@ -1085,18 +1090,18 @@ fn parse_ecdsa_signature(sig: Bytes) -> Result<Bytes, TLSError> {
         let rlen = check_lbytes1(&sig.slice_range(3..sig.len()))?;
         let r = sig.slice(4 + rlen - 32, 32);
         if sig.len() < 6 + rlen + 32 {
-            Err(PARSE_FAILED)
+            NameMeA::Err(PARSE_FAILED)
         } else {
             check_eq(&bytes1(0x02), &sig.slice_range(4 + rlen..5 + rlen))?;
             check_lbytes1_full(&sig.slice_range(5 + rlen..sig.len()))?;
             let s = sig.slice(sig.len() - 32, 32);
-            Ok(r.concat(&s))
+            NameMeA::Ok(r.concat(&s))
         }
     }
 }
-pub fn certificate_verify(algs: Algorithms, cv: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn certificate_verify(algs: Algorithms, cv: &ByteSeq) -> NameMeG {
     if cv.len() != 64 {
-        Err(PARSE_FAILED)
+        NameMeG::Err(PARSE_FAILED)
     } else {
         let sv = ecdsa_signature(cv)?;
 
@@ -1105,11 +1110,11 @@ pub fn certificate_verify(algs: Algorithms, cv: &ByteSeq) -> Result<HandshakeDat
         let sig = b.concat(&a);
 
         let a = handshake_message(HandshakeType::CertificateVerify, &sig)?;
-        Ok(a)
+        NameMeG::Ok(a)
     }
 }
 
-pub fn parse_certificate_verify(algs: Algorithms, cv: &HandshakeData) -> Result<Bytes, TLSError> {
+pub fn parse_certificate_verify(algs: Algorithms, cv: &HandshakeData) -> NameMeA {
     let HandshakeData(cv) = get_handshake_message_ty(HandshakeType::CertificateVerify, cv)?;
     let sa = sig_alg(algs);
 
@@ -1118,27 +1123,27 @@ pub fn parse_certificate_verify(algs: Algorithms, cv: &HandshakeData) -> Result<
     check_lbytes2_full(&cv.slice_range(2..cv.len()))?;
     match sa {
         SignatureScheme::EcdsaSecp256r1Sha256 => parse_ecdsa_signature(cv.slice_range(4..cv.len())),
-        SignatureScheme::RsaPssRsaSha256 => Ok(cv.slice_range(4..cv.len())),
+        SignatureScheme::RsaPssRsaSha256 => NameMeA::Ok(cv.slice_range(4..cv.len())),
         SignatureScheme::ED25519 => {
             if cv.len() - 4 == 64 {
-                Ok(cv.slice_range(8..cv.len()))
+                NameMeA::Ok(cv.slice_range(8..cv.len()))
             } else {
-                Err(PARSE_FAILED)
+                NameMeA::Err(PARSE_FAILED)
             }
         }
     }
 }
 
-pub fn finished(_algs: Algorithms, vd: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn finished(_algs: Algorithms, vd: &ByteSeq) -> NameMeG {
     handshake_message(HandshakeType::Finished, vd)
 }
 
-pub fn parse_finished(_algs: Algorithms, fin: &HandshakeData) -> Result<Bytes, TLSError> {
+pub fn parse_finished(_algs: Algorithms, fin: &HandshakeData) -> NameMeA {
     let HandshakeData(fin) = get_handshake_message_ty(HandshakeType::Finished, fin)?;
-    Ok(fin)
+    NameMeA::Ok(fin)
 }
 
-pub fn session_ticket(_algs: Algorithms, tkt: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn session_ticket(_algs: Algorithms, tkt: &ByteSeq) -> NameMeG {
     let lifetime = U32_to_be_bytes(U32(172800));
     let age = U32_to_be_bytes(U32(9999));
     let nonce = lbytes1(&bytes1(1))?;
@@ -1157,10 +1162,7 @@ pub fn session_ticket(_algs: Algorithms, tkt: &ByteSeq) -> Result<HandshakeData,
     )
 }
 
-pub fn parse_session_ticket(
-    _algs: Algorithms,
-    tkt: &HandshakeData,
-) -> Result<(U32, Bytes), TLSError> {
+pub fn parse_session_ticket(_algs: Algorithms, tkt: &HandshakeData) -> NameMeV {
     let HandshakeData(tkt) = get_handshake_message_ty(HandshakeType::NewSessionTicket, tkt)?;
     let lifetime = U32_from_be_bytes(U32Word::from_seq(&tkt.slice_range(0..4)));
     let age = U32_from_be_bytes(U32Word::from_seq(&tkt.slice_range(4..8)));
@@ -1168,7 +1170,7 @@ pub fn parse_session_ticket(
     let stkt_len = check_lbytes2(&tkt.slice_range(9 + nonce_len..tkt.len()))?;
     let stkt = tkt.slice_range(11 + nonce_len..11 + nonce_len + stkt_len);
     check_lbytes2_full(&tkt.slice_range(11 + nonce_len + stkt_len..tkt.len()))?;
-    Ok((lifetime + age, stkt))
+    NameMeV::Ok((lifetime + age, stkt))
 }
 
 /* Record Layer Serialization and Parsing */
@@ -1201,24 +1203,24 @@ pub fn content_type(t: ContentType) -> u8 {
     }
 }
 
-pub fn get_content_type(t: u8) -> Result<ContentType, TLSError> {
+pub fn get_content_type(t: u8) -> NameMeL {
     // TODO: Support mechanical transformation of `else if` into `else { if }`?
     if t == 0 {
-        Err(PARSE_FAILED)
+        NameMeL::Err(PARSE_FAILED)
     } else {
         if t == 20 {
-            Ok(ContentType::ChangeCipherSpec)
+            NameMeL::Ok(ContentType::ChangeCipherSpec)
         } else {
             if t == 21 {
-                Ok(ContentType::Alert)
+                NameMeL::Ok(ContentType::Alert)
             } else {
                 if t == 22 {
-                    Ok(ContentType::Handshake)
+                    NameMeL::Ok(ContentType::Handshake)
                 } else {
                     if t == 23 {
-                        Ok(ContentType::ApplicationData)
+                        NameMeL::Ok(ContentType::ApplicationData)
                     } else {
-                        Err(PARSE_FAILED)
+                        NameMeL::Err(PARSE_FAILED)
                     }
                 }
             }
@@ -1226,34 +1228,34 @@ pub fn get_content_type(t: u8) -> Result<ContentType, TLSError> {
     }
 }
 
-pub fn handshake_record(p: &HandshakeData) -> Result<Bytes, TLSError> {
+pub fn handshake_record(p: &HandshakeData) -> NameMeA {
     let HandshakeData(p) = p;
     let ty = bytes1(content_type(ContentType::Handshake));
     let ver = bytes2(3u8, 3u8);
 
     let a = lbytes2(p)?;
-    Ok(ty.concat(&ver).concat(&a))
+    NameMeA::Ok(ty.concat(&ver).concat(&a))
 }
 
-pub fn check_handshake_record(p: &ByteSeq) -> Result<(HandshakeData, usize), TLSError> {
+pub fn check_handshake_record(p: &ByteSeq) -> NameMeX {
     if p.len() < 5 {
-        Err(PARSE_FAILED)
+        NameMeX::Err(PARSE_FAILED)
     } else {
         let ty = bytes1(content_type(ContentType::Handshake));
         let ver = bytes2(3u8, 3u8);
         check_eq(&ty, &p.slice_range(0..1))?;
         check_eq(&ver, &p.slice_range(1..3))?;
         let len = check_lbytes2(&p.slice_range(3..p.len()))?;
-        Ok((HandshakeData(p.slice_range(5..5 + len)), 5 + len))
+        NameMeX::Ok((HandshakeData(p.slice_range(5..5 + len)), 5 + len))
     }
 }
 
-pub fn get_handshake_record(p: &ByteSeq) -> Result<HandshakeData, TLSError> {
+pub fn get_handshake_record(p: &ByteSeq) -> NameMeG {
     let (hd, len) = check_handshake_record(p)?;
     if len == p.len() {
-        Ok(hd)
+        NameMeG::Ok(hd)
     } else {
-        Err(PARSE_FAILED)
+        NameMeG::Err(PARSE_FAILED)
     }
 }
 
@@ -1271,10 +1273,10 @@ pub fn transcript_add1(tx: Transcript, msg: &HandshakeData) -> Transcript {
     Transcript(ha, handshake_concat(tx, msg))
 }
 
-pub fn get_transcript_hash(tx: &Transcript) -> Result<Digest, TLSError> {
+pub fn get_transcript_hash(tx: &Transcript) -> NameMeN {
     let Transcript(ha, HandshakeData(txby)) = tx;
     let th = hash(ha, txby)?;
-    Ok(th)
+    NameMeN::Ok(th)
 }
 
 pub fn get_transcript_hash_truncated_client_hello(
