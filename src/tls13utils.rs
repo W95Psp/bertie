@@ -21,35 +21,16 @@ pub fn bytes<T: SeqTrait<U8>>(x: &T) -> ByteSeq {
     Seq::from_seq(x)
 }
 
+pub fn merge_opts<T>(o1: Option<T>, o2: Option<T>) -> Result<Option<T>, TLSError> {
+    match (o1, o2) {
+        (None, Some(o)) => Ok(Some(o)),
+        (Some(o), None) => Ok(Some(o)),
+        (None, None) => Ok(None),
+        _ => Err(parse_failed()),
+    }
+}
+
 bytes!(Random, 32);
-
-bytes!(Bytes1, 1);
-bytes!(Bytes2, 2);
-bytes!(Bytes3, 3);
-bytes!(Bytes4, 4);
-bytes!(Bytes5, 5);
-bytes!(Bytes6, 6);
-bytes!(Bytes7, 7);
-bytes!(Bytes8, 8);
-bytes!(Bytes9, 9);
-bytes!(Bytes10, 10);
-bytes!(Bytes11, 11);
-bytes!(Bytes12, 12);
-bytes!(Bytes32, 32);
-bytes!(Bytes98, 98);
-
-pub fn bytes1(x: u8) -> ByteSeq {
-    bytes(&Bytes1([U8(x)]))
-}
-pub fn bytes2(x: u8, y: u8) -> ByteSeq {
-    bytes(&Bytes2([U8(x), U8(y)]))
-}
-pub fn bytes3(x: u8, y: u8, z: u8) -> ByteSeq {
-    bytes(&Bytes3([U8(x), U8(y), U8(z)]))
-}
-pub fn bytes5(x0: u8, x1: u8, x2: u8, x3: u8, x4: u8) -> ByteSeq {
-    bytes(&Bytes5([U8(x0), U8(x1), U8(x2), U8(x3), U8(x4)]))
-}
 
 // Local error codes
 pub type TLSError = u8;

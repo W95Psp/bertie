@@ -11,6 +11,35 @@ use crate::*;
 
 /// Well Known Constants
 
+bytes!(Bytes1, 1);
+bytes!(Bytes2, 2);
+bytes!(Bytes3, 3);
+bytes!(Bytes4, 4);
+bytes!(Bytes5, 5);
+bytes!(Bytes6, 6);
+bytes!(Bytes7, 7);
+bytes!(Bytes8, 8);
+bytes!(Bytes9, 9);
+bytes!(Bytes10, 10);
+bytes!(Bytes11, 11);
+bytes!(Bytes12, 12);
+bytes!(Bytes32, 32);
+bytes!(Bytes98, 98);
+
+pub fn bytes1(x: u8) -> ByteSeq {
+    bytes(&Bytes1([U8(x)]))
+}
+pub fn bytes2(x: u8, y: u8) -> ByteSeq {
+    bytes(&Bytes2([U8(x), U8(y)]))
+}
+pub fn bytes3(x: u8, y: u8, z: u8) -> ByteSeq {
+    bytes(&Bytes3([U8(x), U8(y), U8(z)]))
+}
+pub fn bytes5(x0: u8, x1: u8, x2: u8, x3: u8, x4: u8) -> ByteSeq {
+    bytes(&Bytes5([U8(x0), U8(x1), U8(x2), U8(x3), U8(x4)]))
+}
+
+
 pub const LABEL_IV: Bytes2 = Bytes2(secret_bytes!([105u8, 118u8]));
 pub const LABEL_KEY: Bytes3 = Bytes3(secret_bytes!([107, 101, 121]));
 pub const LABEL_TLS13: Bytes6 = Bytes6(secret_bytes!([116, 108, 115, 049, 051, 032]));
@@ -227,14 +256,6 @@ pub struct EXTS(
     pub Option<Bytes>, //Binder
 );
 
-pub fn merge_opts<T>(o1: Option<T>, o2: Option<T>) -> Result<Option<T>, TLSError> {
-    match (o1, o2) {
-        (None, Some(o)) => Ok(Some(o)),
-        (Some(o), None) => Ok(Some(o)),
-        (None, None) => Ok(None),
-        _ => Err(parse_failed()),
-    }
-}
 pub fn merge_exts(e1: EXTS, e2: EXTS) -> Result<EXTS, TLSError> {
     let EXTS(sn1, ks1, tkt1, bd1) = e1;
     let EXTS(sn2, ks2, tkt2, bd2) = e2;
