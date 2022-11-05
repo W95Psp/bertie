@@ -675,6 +675,16 @@ pub fn find_handshake_message(ty: HandshakeType, payload: &HandshakeData, start:
     }
 }
 
+pub fn client_hello_aux(
+    exts: &Bytes,
+    algs: &Algorithms,
+    tkt: &ByteSeq,
+) -> Result<(Bytes, usize), TLSError> {
+    let pskm = psk_key_exchange_modes(algs)?;
+    let (psk, len) = pre_shared_key(algs, tkt)?;
+    Ok((exts.concat(&pskm).concat(&psk), len))
+}
+
 pub fn client_hello(
     algs: &Algorithms,
     cr: &Random,
@@ -693,16 +703,24 @@ pub fn client_hello(
     let ks = key_shares(algs, gx)?;
     let mut exts = sn.concat(&sv).concat(&sg).concat(&sa).concat(&ks);
     let mut trunc_len = 0;
-    match (psk_mode(algs), tkt) {
-        // (true, Some(tkt)) => (),
-        // (true, Some(tkt)) => {
-        //        let pskm = psk_key_exchange_modes(algs)?;
-        //        let (psk, len) = pre_shared_key(algs, tkt)?;
-        //        exts = exts.concat(&pskm).concat(&psk);
-        //        trunc_len = len},
-        (false, None) => (),
-        _ => Err(PSK_MODE_MISMATCH)?,
-    }
+    let (exts_, len_) = match (psk_mode(algs), tkt) {
+        (true, Some(tkt)) => client_hello_aux(&exts, &algs, &tkt)?,
+        _ => (exts, trunc_len),
+        _ => Result::<(Bytes, usize), TLSError>::Err(PSK_MODE_MISMATCH)?,
+    };
+    exts = exts_;
+    trunc_len = len_;
+
+    // match (psk_mode(algs), tkt) {
+    // // (true, Some(tkt)) => (),
+    // // (true, Some(tkt)) => {
+    // //        let pskm = psk_key_exchange_modes(algs)?;
+    // //        let (psk, len) = pre_shared_key(algs, tkt)?;
+    // //        exts = exts.concat(&pskm).concat(&psk);
+    // //        trunc_len = len},
+    // (false, None) => (),
+    // _ => Err(PSK_MODE_MISMATCH)?,
+    // }
     let ch = handshake_message(
         HandshakeType::ClientHello,
         &ver.concat(cr)
