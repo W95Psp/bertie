@@ -11,7 +11,7 @@ use crate::*;
 
 /// Well Known Constants
 
-pub const LABEL_IV: Bytes2 = Bytes2(secret_bytes!([105, 118]));
+pub const LABEL_IV: Bytes2 = Bytes2(secret_bytes!([105u8, 118u8]));
 pub const LABEL_KEY: Bytes3 = Bytes3(secret_bytes!([107, 101, 121]));
 pub const LABEL_TLS13: Bytes6 = Bytes6(secret_bytes!([116, 108, 115, 049, 051, 032]));
 pub const LABEL_DERIVED: Bytes7 = Bytes7(secret_bytes!([100, 101, 114, 105, 118, 101, 100]));
@@ -255,9 +255,6 @@ fn check_extension(algs: &Algorithms, b: &ByteSeq) -> Result<(usize, EXTS), TLSE
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
     let out = EXTS(None, None, None, None);
-    // XXX: not hacspec compatible
-    //      - match
-    //      - ? in argument
     match (l0, l1) {
         (0, 0) => Ok((
             4 + len,
@@ -304,14 +301,14 @@ pub fn check_server_extension(
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
     let mut out = None;
-    match (l0, l1) {
-        (0, 0x2b) => check_server_supported_version(algs, &b.slice_range(4..4 + len))?,
-        (0, 0x33) => {
-            let gx = check_server_key_share(algs, &b.slice_range(4..4 + len))?;
-            out = Some(gx)
-        }
-        (0, 41) => check_server_psk_shared_key(algs, &b.slice_range(4..4 + len))?,
-        _ => (),
+    if l0 == 0 && l1 == 0x2b {
+        check_server_supported_version(algs, &b.slice_range(4..4 + len))?
+    }
+    if l0 == 0 && l1 == 0x33 {
+        out = Some(check_server_key_share(algs, &b.slice_range(4..4 + len))?)
+    }
+    if l0 == 0 && l1 == 41 {
+        check_server_psk_shared_key(algs, &b.slice_range(4..4 + len))?
     }
     Ok((4 + len, out))
 }
@@ -670,7 +667,7 @@ pub fn client_hello(
             exts = exts.concat(&pskm).concat(&psk);
             trunc_len = len;
         }
-        (false, None) => {}
+        (false, None) => (),
         _ => Err(PSK_MODE_MISMATCH)?,
     }
 
@@ -692,7 +689,7 @@ pub fn set_client_hello_binder(
     trunc_len: Option<usize>,
 ) -> Result<HandshakeData, TLSError> {
     let HandshakeData(ch) = ch;
-    let chlen = &ch.len();
+    let chlen = ch.len();
     let hlen = hash_len(&hash_alg(algs));
     match (binder, trunc_len) {
         (Some(m), Some(trunc_len)) => {
@@ -792,9 +789,8 @@ pub fn server_hello(
     let ks = server_key_shares(algs, gy)?;
     let sv = server_supported_version(algs)?;
     let mut exts = ks.concat(&sv);
-    match psk_mode(algs) {
-        true => exts = exts.concat(&server_pre_shared_key(algs)?),
-        false => {}
+    if psk_mode(algs) {
+        exts = exts.concat(&server_pre_shared_key(algs)?)
     }
     let sh = handshake_message(
         HandshakeType::ServerHello,
@@ -839,10 +835,9 @@ pub fn parse_server_hello(
     check_lbytes2_full(&sh.slice_range(next..sh.len()))?;
     next = next + 2;
     let gy = check_server_extensions(algs, &sh.slice_range(next..sh.len()))?;
-    if let Some(gy) = gy {
-        Result::<(Random, KemPk), TLSError>::Ok((Random::from_seq(&srand), gy))
-    } else {
-        Result::<(Random, KemPk), TLSError>::Err(MISSING_KEY_SHARE)
+    match gy {
+        Some(gy) => Result::<(Random, KemPk), TLSError>::Ok((Random::from_seq(&srand), gy)),
+	None => Result::<(Random, KemPk), TLSError>::Err(MISSING_KEY_SHARE)
     }
 }
 
