@@ -1,13 +1,17 @@
+#[cfg(not(feature = "evercrypt"))]
+use crate::*;
 /// A module that for the formatting code needed by TLS 1.3
 /// Import hacspec and all needed definitions.
 #[allow(clippy::manual_range_contains)]
 #[cfg(feature = "evercrypt")]
 use evercrypt_cryptolib::*;
-#[cfg(not(feature = "evercrypt"))]
 use hacspec_cryptolib::*;
 use hacspec_lib::*;
 
-use crate::*;
+use crypto_utils::*;
+
+type CryptoError = u8;
+pub const UNSUPPORTED_ALGORITHM: CryptoError = 6u8;
 
 /// Well Known Constants
 
@@ -27,18 +31,18 @@ bytes!(Bytes32, 32);
 bytes!(Bytes98, 98);
 
 pub fn bytes1(x: u8) -> ByteSeq {
-    bytes(&Bytes1([U8(x)]))
+    // Seq::from_seq(&Bytes1([U8(x)]))
+    ByteSeq::from_seq(&Bytes1([U8(x)]))
 }
 pub fn bytes2(x: u8, y: u8) -> ByteSeq {
-    bytes(&Bytes2([U8(x), U8(y)]))
+    ByteSeq::from_seq(&Bytes2([U8(x), U8(y)]))
 }
 pub fn bytes3(x: u8, y: u8, z: u8) -> ByteSeq {
-    bytes(&Bytes3([U8(x), U8(y), U8(z)]))
+    ByteSeq::from_seq(&Bytes3([U8(x), U8(y), U8(z)]))
 }
 pub fn bytes5(x0: u8, x1: u8, x2: u8, x3: u8, x4: u8) -> ByteSeq {
-    bytes(&Bytes5([U8(x0), U8(x1), U8(x2), U8(x3), U8(x4)]))
+    ByteSeq::from_seq(&Bytes5([U8(x0), U8(x1), U8(x2), U8(x3), U8(x4)]))
 }
-
 
 pub const LABEL_IV: Bytes2 = Bytes2(secret_bytes!([105u8, 118u8]));
 pub const LABEL_KEY: Bytes3 = Bytes3(secret_bytes!([107, 101, 121]));
@@ -184,7 +188,7 @@ pub fn check_psk_key_exchange_modes(_algs: &Algorithms, ch: &ByteSeq) -> Result<
 }
 
 pub fn key_shares(algs: &Algorithms, gx: &KemPk) -> Result<Bytes, TLSError> {
-    let ks = supported_group(algs)?.concat(&lbytes2(&bytes(gx))?);
+    let ks = supported_group(algs)?.concat(&lbytes2(&Bytes::from_seq(gx))?);
     Ok(bytes2(0, 0x33).concat(&lbytes2(&lbytes2(&ks)?)?))
 }
 
@@ -208,7 +212,7 @@ pub fn check_key_shares(algs: &Algorithms, ch: &ByteSeq) -> Result<Bytes, TLSErr
 }
 
 pub fn server_key_shares(algs: &Algorithms, gx: &KemPk) -> Result<Bytes, TLSError> {
-    let ks = supported_group(algs)?.concat(&lbytes2(&bytes(gx))?);
+    let ks = supported_group(algs)?.concat(&lbytes2(&Bytes::from_seq(gx))?);
     Ok(bytes2(0, 0x33).concat(&lbytes2(&ks)?))
 }
 
@@ -260,10 +264,14 @@ pub fn merge_exts(e1: EXTS, e2: EXTS) -> Result<EXTS, TLSError> {
     let EXTS(sn1, ks1, tkt1, bd1) = e1;
     let EXTS(sn2, ks2, tkt2, bd2) = e2;
     Ok(EXTS(
-        merge_opts(sn1, sn2)?,
-        merge_opts(ks1, ks2)?,
-        merge_opts(tkt1, tkt2)?,
-        merge_opts(bd1, bd2)?,
+        // merge_opts(sn1, sn2)?,
+        // merge_opts(ks1, ks2)?,
+        // merge_opts(tkt1, tkt2)?,
+        // merge_opts(bd1, bd2)?,
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
     ))
 }
 
@@ -275,37 +283,46 @@ fn check_extension(algs: &Algorithms, b: &ByteSeq) -> Result<(usize, EXTS), TLSE
     let l0 = (b[0] as U8).declassify() as usize;
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
-    let mut out = EXTS(None, None, None, None);
+    let mut out = EXTS(
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
+        Option::<Bytes>::None,
+    );
     // The following was a match but has been rewritten to an if-statement
     if l0 == 0 && l1 == 0 {
-       out = 
-            EXTS(
-                Some(check_server_name(&b.slice_range(4..4 + len))?),
-                None,
-                None,
-                None,
-            )
-     }
-     if l0 == 0 && l1 == 0x2d {
-            check_psk_key_exchange_modes(algs, &b.slice_range(4..4 + len))?;
-     }
-     if l0 == 0 && l1 == 0x2b {
-            check_supported_versions(algs, &b.slice_range(4..4 + len))?;
-     }
-     if l0 == 0 && l1 == 0x0a {
-            check_supported_groups(algs, &b.slice_range(4..4 + len))?;
-     }
-     if l0 == 0 && l1 == 0x0d {
-            check_signature_algorithms(algs, &b.slice_range(4..4 + len))?;
-     }
-     if l0 == 0 && l1 == 0x33 {
-     	let gx = check_key_shares(algs, &b.slice_range(4..4 + len))?;
-	out = EXTS(None, Some(gx), None, None)
-     }
-     if l0 == 0 && l1 == 41 {
+        out = EXTS(
+            Some(check_server_name(&b.slice_range(4..4 + len))?),
+            Option::<Bytes>::None,
+            Option::<Bytes>::None,
+            Option::<Bytes>::None,
+        )
+    }
+    if l0 == 0 && l1 == 0x2d {
+        check_psk_key_exchange_modes(algs, &b.slice_range(4..4 + len))?;
+    }
+    if l0 == 0 && l1 == 0x2b {
+        check_supported_versions(algs, &b.slice_range(4..4 + len))?;
+    }
+    if l0 == 0 && l1 == 0x0a {
+        check_supported_groups(algs, &b.slice_range(4..4 + len))?;
+    }
+    if l0 == 0 && l1 == 0x0d {
+        check_signature_algorithms(algs, &b.slice_range(4..4 + len))?;
+    }
+    if l0 == 0 && l1 == 0x33 {
+        let gx = check_key_shares(algs, &b.slice_range(4..4 + len))?;
+        out = EXTS(
+            Option::<Bytes>::None,
+            Some(gx),
+            Option::<Bytes>::None,
+            Option::<Bytes>::None,
+        )
+    }
+    if l0 == 0 && l1 == 41 {
         check_psk_shared_key(algs, &b.slice_range(4..4 + len))?;
-     }
-     Ok((4 + len, out))
+    }
+    Ok((4 + len, out))
 }
 
 pub fn check_server_extension(
@@ -315,7 +332,7 @@ pub fn check_server_extension(
     let l0 = (b[0] as U8).declassify() as usize;
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
-    let mut out = None;
+    let mut out = Option::<Bytes>::None;
     if l0 == 0 && l1 == 0x2b {
         check_server_supported_version(algs, &b.slice_range(4..4 + len))?
     }
@@ -345,7 +362,8 @@ pub fn check_server_extensions(algs: &Algorithms, b: &ByteSeq) -> Result<Option<
         Ok(out)
     } else {
         let out_rest = check_server_extensions(algs, &b.slice_range(len..b.len()))?;
-        merge_opts(out, out_rest)
+        // merge_opts(out, out_rest)
+        Ok(Option::<Bytes>::None)
     }
 }
 
@@ -675,14 +693,15 @@ pub fn client_hello(
     let ks = key_shares(algs, gx)?;
     let mut exts = sn.concat(&sv).concat(&sg).concat(&sa).concat(&ks);
     let mut trunc_len = 0;
-    match (psk_mode(algs),tkt) {
-       (true, Some(tkt)) => {
-              let pskm = psk_key_exchange_modes(algs)?;
-              let (psk, len) = pre_shared_key(algs, tkt)?;
-	      exts = exts.concat(&pskm).concat(&psk);
-	      trunc_len = len},
-       (false, None) => (),
-       _ => Err(PSK_MODE_MISMATCH)?
+    match (psk_mode(algs), tkt) {
+        // (true, Some(tkt)) => (),
+        // (true, Some(tkt)) => {
+        //        let pskm = psk_key_exchange_modes(algs)?;
+        //        let (psk, len) = pre_shared_key(algs, tkt)?;
+        //        exts = exts.concat(&pskm).concat(&psk);
+        //        trunc_len = len},
+        (false, None) => (),
+        _ => Err(PSK_MODE_MISMATCH)?,
     }
     let ch = handshake_message(
         HandshakeType::ClientHello,
@@ -850,7 +869,7 @@ pub fn parse_server_hello(
     let gy = check_server_extensions(algs, &sh.slice_range(next..sh.len()))?;
     match gy {
         Some(gy) => Result::<(Random, KemPk), TLSError>::Ok((Random::from_seq(&srand), gy)),
-	None => Result::<(Random, KemPk), TLSError>::Err(MISSING_KEY_SHARE)
+        None => Result::<(Random, KemPk), TLSError>::Err(MISSING_KEY_SHARE),
     }
 }
 
