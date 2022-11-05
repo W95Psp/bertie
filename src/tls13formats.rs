@@ -275,43 +275,37 @@ fn check_extension(algs: &Algorithms, b: &ByteSeq) -> Result<(usize, EXTS), TLSE
     let l0 = (b[0] as U8).declassify() as usize;
     let l1 = (b[1] as U8).declassify() as usize;
     let len = check_lbytes2(&b.slice_range(2..b.len()))?;
-    let out = EXTS(None, None, None, None);
-    match (l0, l1) {
-        (0, 0) => Ok((
-            4 + len,
+    let mut out = EXTS(None, None, None, None);
+    // The following was a match but has been rewritten to an if-statement
+    if l0 == 0 && l1 == 0 {
+       out = 
             EXTS(
                 Some(check_server_name(&b.slice_range(4..4 + len))?),
                 None,
                 None,
                 None,
-            ),
-        )),
-        (0, 0x2d) => {
+            )
+     }
+     if l0 == 0 && l1 == 0x2d {
             check_psk_key_exchange_modes(algs, &b.slice_range(4..4 + len))?;
-            Ok((4 + len, out))
-        }
-        (0, 0x2b) => {
+     }
+     if l0 == 0 && l1 == 0x2b {
             check_supported_versions(algs, &b.slice_range(4..4 + len))?;
-            Ok((4 + len, out))
-        }
-        (0, 0x0a) => {
+     }
+     if l0 == 0 && l1 == 0x0a {
             check_supported_groups(algs, &b.slice_range(4..4 + len))?;
-            Ok((4 + len, out))
-        }
-        (0, 0x0d) => {
+     }
+     if l0 == 0 && l1 == 0x0d {
             check_signature_algorithms(algs, &b.slice_range(4..4 + len))?;
-            Ok((4 + len, out))
-        }
-        (0, 0x33) => match check_key_shares(algs, &b.slice_range(4..4 + len)) {
-            Ok(gx) => Ok((4 + len, EXTS(None, Some(gx), None, None))),
-            Err(_) => Err(MISSING_KEY_SHARE),
-        },
-        (0, 41) => {
-            check_psk_shared_key(algs, &b.slice_range(4..4 + len))?;
-            Ok((4 + len, out))
-        }
-        _ => Ok((4 + len, out)),
-    }
+     }
+     if l0 == 0 && l1 == 0x33 {
+     	let gx = check_key_shares(algs, &b.slice_range(4..4 + len))?;
+	out = EXTS(None, Some(gx), None, None)
+     }
+     if l0 == 0 && l1 == 41 {
+        check_psk_shared_key(algs, &b.slice_range(4..4 + len))?;
+     }
+     Ok((4 + len, out))
 }
 
 pub fn check_server_extension(
@@ -681,17 +675,15 @@ pub fn client_hello(
     let ks = key_shares(algs, gx)?;
     let mut exts = sn.concat(&sv).concat(&sg).concat(&sa).concat(&ks);
     let mut trunc_len = 0;
-    match (psk_mode(algs), tkt) {
-        (true, Some(tkt)) => {
-            let pskm = psk_key_exchange_modes(algs)?;
-            let (psk, len) = pre_shared_key(algs, tkt)?;
-            exts = exts.concat(&pskm).concat(&psk);
-            trunc_len = len;
-        }
-        (false, None) => (),
-        _ => Err(PSK_MODE_MISMATCH)?,
+    match (psk_mode(algs),tkt) {
+       (true, Some(tkt)) => {
+              let pskm = psk_key_exchange_modes(algs)?;
+              let (psk, len) = pre_shared_key(algs, tkt)?;
+	      exts = exts.concat(&pskm).concat(&psk);
+	      trunc_len = len},
+       (false, None) => (),
+       _ => Err(PSK_MODE_MISMATCH)?
     }
-
     let ch = handshake_message(
         HandshakeType::ClientHello,
         &ver.concat(cr)
