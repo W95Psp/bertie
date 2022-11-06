@@ -20,14 +20,6 @@ pub enum Client {
     Client1(ClientPostClientFinished, DuplexCipherState1),
 }
 
-pub fn in_psk_mode(c: &Client) -> bool {
-    match c {
-        Client::Client0(cstate, _) => psk_mode(&algs_post_client_hello(cstate)),
-        Client::ClientH(cstate, _, _, _) => psk_mode(&algs_post_server_hello(cstate)),
-        Client::Client1(cstate, _) => psk_mode(&algs_post_client_finished(cstate)),
-    }
-}
-
 // Connect
 pub fn client_connect(
     algs: Algorithms,

@@ -164,15 +164,9 @@ pub struct ClientPostCertificateVerify(Random, Random, Algorithms, Key, MacKey, 
 pub struct ClientPostServerFinished(Random, Random, Algorithms, Key, MacKey, Transcript);
 pub struct ClientPostClientFinished(Random, Random, Algorithms, Key, Transcript);
 
-pub fn algs_post_client_hello(st: &ClientPostClientHello) -> Algorithms {
-    st.1
-}
-
-pub fn algs_post_server_hello(st: &ClientPostServerHello) -> Algorithms {
-    st.2
-}
-pub fn algs_post_client_finished(st: &ClientPostClientFinished) -> Algorithms {
-    st.2
+fn psk_mode_post_server_hello(st: &ClientPostServerHello) -> bool {
+   let ClientPostServerHello(_,_,algs,_,_,_,_) = st;
+   psk_mode(algs)
 }
 
 pub struct ServerPostClientHello(
@@ -405,7 +399,7 @@ pub fn client_finish(
     payload: &HandshakeData,
     st: ClientPostServerHello,
 ) -> Result<(HandshakeData, DuplexCipherState1, ClientPostClientFinished), TLSError> {
-    if psk_mode(&algs_post_server_hello(&st)) {
+    if psk_mode_post_server_hello(&st) {
             let (ee, sfin) = get_handshake_messages2(payload)?;
             let cstate_cv = put_psk_skip_server_signature(&ee, st)?;
             let (cipher, cstate_fin) = put_server_finished(&sfin, cstate_cv)?;
