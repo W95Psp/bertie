@@ -9,8 +9,6 @@ use hacspec_lib::*;
 
 use crate::*;
 
-/// Well Known Constants
-
 bytes!(Bytes1, 1);
 bytes!(Bytes2, 2);
 bytes!(Bytes3, 3);
@@ -39,6 +37,8 @@ pub fn bytes5(x0: u8, x1: u8, x2: u8, x3: u8, x4: u8) -> ByteSeq {
     bytes(&Bytes5([U8(x0), U8(x1), U8(x2), U8(x3), U8(x4)]))
 }
 
+
+/// Well Known Constants
 
 pub const LABEL_IV: Bytes2 = Bytes2(secret_bytes!([105u8, 118u8]));
 pub const LABEL_KEY: Bytes3 = Bytes3(secret_bytes!([107, 101, 121]));

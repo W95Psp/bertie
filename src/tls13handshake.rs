@@ -236,16 +236,16 @@ fn get_client_hello(
     }
 }
 
-fn compute_psk_binder_zero_rtt(
+fn compute_psk_binder_zero_rtt_aux(
     algs0: Algorithms,
     ch: HandshakeData,
     trunc_len: usize,
-    psk: &Option<PSK>,
+    ha:HashAlgorithm,
+    ae:AeadAlgorithm,
+    zero_rtt:bool,
+    k: &PSK,
     tx: Transcript,
 ) -> Result<(HandshakeData, Option<ClientCipherState0>, Transcript), TLSError> {
-    let Algorithms(ha, ae, _sa, _ks, psk_mode, zero_rtt) = algs0;
-    match (psk_mode, psk, trunc_len) {
-        (true, Some(k), _) => {
             let th_trunc = get_transcript_hash_truncated_client_hello(&tx, &ch, trunc_len)?;
             let mk = derive_binder_key(&ha, k)?;
             let binder = hmac_tag(&ha, &mk, &th_trunc)?;
@@ -259,13 +259,31 @@ fn compute_psk_binder_zero_rtt(
             } else {
                 Ok((nch, None, tx_ch))
             }
-        }
-        (false, None, 0) => {
-            let tx_ch = transcript_add1(tx, &ch);
-            Ok((ch, None, tx_ch))
-        }
-        _ => Err(PSK_MODE_MISMATCH),
-    }
+}
+
+fn compute_ch_transcript_non_psk_aux(
+    ch: HandshakeData,
+    tx: Transcript,
+) -> Result<(HandshakeData, Option<ClientCipherState0>, Transcript), TLSError> {
+    let tx_ch = transcript_add1(tx, &ch);
+    Ok((ch,None,tx_ch))
+}
+
+fn compute_psk_binder_zero_rtt(
+    algs0: Algorithms,
+    ch: HandshakeData,
+    trunc_len: usize,
+    psk: &Option<PSK>,
+    tx: Transcript,
+) -> Result<(HandshakeData, Option<ClientCipherState0>, Transcript), TLSError> {
+    let Algorithms(ha, ae, _sa, _ks, psk_mode, zero_rtt) = algs0;
+    let (nch,cipher0,tx_ch) =
+      match (psk_mode, psk, trunc_len) {
+	(true, Some(k), _) => compute_psk_binder_zero_rtt_aux(algs0,ch,trunc_len,ha,ae,zero_rtt,k,tx)?,
+        (false, None, 0) => compute_ch_transcript_non_psk_aux(ch,tx)?,
+        _ => Err(PSK_MODE_MISMATCH)?,
+      };
+    Ok((nch,cipher0,tx_ch))
 }
 
 fn put_server_hello(
@@ -299,7 +317,7 @@ fn put_server_signature(
         let tx = transcript_add1(tx, sc);
         let th_sc = get_transcript_hash(&tx)?;
         let spki = verification_key_from_cert(&cert)?;
-        println!("Server signature scheme: {:?}", spki.0);
+        //println!("Server signature scheme: {:?}", spki.0);
         let pk = cert_public_key(&cert, &spki)?;
         let sig = parse_certificate_verify(&algs, scv)?;
         let sigval = PREFIX_SERVER_SIGNATURE.concat(&th_sc);
@@ -423,6 +441,26 @@ fn put_client_hello(
     ))
 }
 
+fn process_psk_binder_zero_rtt_aux(
+    ha: HashAlgorithm,
+    ae: AeadAlgorithm,
+    zero_rtt: bool,
+    th_trunc: Digest,
+    th: Digest,
+    k: &PSK,
+    binder: Bytes,
+) -> Result<Option<ServerCipherState0>, TLSError> {
+    let mk = derive_binder_key(&ha, k)?;
+    hmac_verify(&ha, &mk, &th_trunc, &binder)?;
+    if zero_rtt {
+       let (aek, key) = derive_0rtt_keys(&ha, &ae, k, &th)?;
+       let cipher0 = Some(server_cipher_state0(ae, aek, 0, key));
+       Ok(cipher0)
+    } else {
+       Ok(None)
+    }
+}
+
 fn process_psk_binder_zero_rtt(
     algs: Algorithms,
     th_trunc: Digest,
@@ -430,19 +468,9 @@ fn process_psk_binder_zero_rtt(
     psko: &Option<PSK>,
     bindero: Option<Bytes>,
 ) -> Result<Option<ServerCipherState0>, TLSError> {
-    let Algorithms(ha, ae, _sa, _ks, psk_mode, zero_rtt) = algs;
+  let Algorithms(ha, ae, _sa, _ks, psk_mode, zero_rtt) = algs;
     match (psk_mode, psko, bindero) {
-        (true, Some(k), Some(binder)) => {
-            let mk = derive_binder_key(&ha, k)?;
-            hmac_verify(&ha, &mk, &th_trunc, &binder)?;
-            if zero_rtt {
-                let (aek, key) = derive_0rtt_keys(&ha, &ae, k, &th)?;
-                let cipher0 = Some(server_cipher_state0(ae, aek, 0, key));
-                Ok(cipher0)
-            } else {
-                Ok(None)
-            }
-        }
+        (true, Some(k), Some(binder)) => process_psk_binder_zero_rtt_aux(ha,ae,zero_rtt,th_trunc,th,k,binder),
         (false, None, None) => Ok(None),
         _ => Err(PSK_MODE_MISMATCH),
     }
