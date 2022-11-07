@@ -94,7 +94,7 @@ const SHA256_EMPTY: Bytes32 = Bytes32(secret_bytes!([
 */
 
 fn ciphersuite(algs: &Algorithms) -> Result<Bytes, TLSError> {
-    match (hash_alg(algs), aead_alg(algs)) {
+    match (algs.hash_alg, algs.aead_alg) {
         (HashAlgorithm::SHA256, AeadAlgorithm::Aes128Gcm) => Ok(bytes2(0x13, 0x01)),
         (HashAlgorithm::SHA384, AeadAlgorithm::Aes256Gcm) => Ok(bytes2(0x13, 0x02)),
         (HashAlgorithm::SHA256, AeadAlgorithm::Chacha20Poly1305) => Ok(bytes2(0x13, 0x03)),
@@ -103,7 +103,7 @@ fn ciphersuite(algs: &Algorithms) -> Result<Bytes, TLSError> {
 }
 
 fn supported_group(algs: &Algorithms) -> Result<Bytes, TLSError> {
-    match kem_alg(algs) {
+    match algs.kem_alg {
         NamedGroup::X25519 => Ok(bytes2(0x00, 0x1D)),
         NamedGroup::Secp256r1 => Ok(bytes2(0x00, 0x17)),
         NamedGroup::X448 => Err(UNSUPPORTED_ALGORITHM),
@@ -113,7 +113,7 @@ fn supported_group(algs: &Algorithms) -> Result<Bytes, TLSError> {
 }
 
 fn signature_algorithm(algs: &Algorithms) -> Result<Bytes, TLSError> {
-    match sig_alg(algs) {
+    match algs.sig_alg {
         SignatureScheme::RsaPssRsaSha256 => Ok(bytes2(0x08, 0x04)),
         SignatureScheme::EcdsaSecp256r1Sha256 => Ok(bytes2(0x04, 0x03)),
         SignatureScheme::ED25519 => Err(UNSUPPORTED_ALGORITHM),
@@ -220,7 +220,7 @@ pub fn check_server_key_share(algs: &Algorithms, b: &ByteSeq) -> Result<Bytes, T
 
 pub fn pre_shared_key(algs: &Algorithms, tkt: &ByteSeq) -> Result<(Bytes, usize), TLSError> {
     let identities = lbytes2(&lbytes2(tkt)?.concat(&U32_to_be_bytes(U32(0xffffffff))))?;
-    let binders = lbytes2(&lbytes1(&zero_key(&hash_alg(algs)))?)?;
+    let binders = lbytes2(&lbytes1(&zero_key(&algs.hash_alg))?)?;
     let ext = bytes2(0, 41).concat(&lbytes2(&identities.concat(&binders))?);
     Ok((ext, binders.len()))
 }
@@ -685,7 +685,7 @@ pub fn client_hello(
     let ks = key_shares(algs, gx)?;
     let exts = sn.concat(&sv).concat(&sg).concat(&sa).concat(&ks);
     let trunc_len = 0;
-    let (exts, len) = match (psk_mode(algs), tkt) {
+    let (exts, len) = match (algs.psk_mode, tkt) {
         (true, Some(tkt)) => client_hello_aux(&exts, &algs, &tkt)?,
         (false,None) => (exts, trunc_len),
         _ => Result::<(Bytes, usize), TLSError>::Err(PSK_MODE_MISMATCH)?,
@@ -709,7 +709,7 @@ pub fn set_client_hello_binder(
 ) -> Result<HandshakeData, TLSError> {
     let HandshakeData(ch) = ch;
     let chlen = ch.len();
-    let hlen = hash_len(&hash_alg(algs));
+    let hlen = hash_len(&algs.hash_alg);
     match (binder, trunc_len) {
         (Some(m), Some(trunc_len)) => {
             if chlen - hlen == trunc_len {
@@ -764,8 +764,8 @@ pub fn parse_client_hello(
     next = next + 2;
     let exts = check_extensions(algs, &ch.slice_range(next..ch.len()))?;
     //println!("check_extensions");
-    let trunc_len = ch.len() - hash_len(&hash_alg(algs)) - 3;
-    match (psk_mode(algs), exts) {
+    let trunc_len = ch.len() - hash_len(&algs.hash_alg) - 3;
+    match (algs.psk_mode, exts) {
         (_, EXTS(_, None, _, _)) => Err(MISSING_KEY_SHARE),
         (true, EXTS(Some(sn), Some(gx), Some(tkt), Some(binder))) => Ok((
             Random::from_seq(&crand),
@@ -808,7 +808,7 @@ pub fn server_hello(
     let ks = server_key_shares(algs, gy)?;
     let sv = server_supported_version(algs)?;
     let mut exts = ks.concat(&sv);
-    if psk_mode(algs) {
+    if algs.psk_mode {
         exts = exts.concat(&server_pre_shared_key(algs)?)
     }
     let sh = handshake_message(
@@ -956,7 +956,7 @@ pub fn certificate_verify(algs: &Algorithms, cv: &ByteSeq) -> Result<HandshakeDa
 
 pub fn parse_certificate_verify(algs: &Algorithms, cv: &HandshakeData) -> Result<Bytes, TLSError> {
     let HandshakeData(cv) = get_handshake_message_ty(HandshakeType::CertificateVerify, cv)?;
-    let sa = sig_alg(algs);
+    let sa = algs.sig_alg;
     check_eq(&signature_algorithm(algs)?, &cv.slice_range(0..2))?;
     check_lbytes2_full(&cv.slice_range(2..cv.len()))?;
     match sa {

@@ -217,15 +217,16 @@ pub fn check_lbytes3_full(b: &ByteSeq) -> Result<(), TLSError> {
 
 // Algorithmns(ha, ae, sa, gn, psk_mode, zero_rtt)
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Algorithms(
-    pub HashAlgorithm,
-    pub AeadAlgorithm,
-    pub SignatureScheme,
-    pub KemScheme,
-    pub bool,
-    pub bool,
-);
+pub struct Algorithms {
+    pub hash_alg: HashAlgorithm,
+    pub aead_alg: AeadAlgorithm,
+    pub sig_alg: SignatureScheme,
+    pub kem_alg: KemScheme,
+    pub psk_mode: bool,
+    pub zero_rtt: bool,
+}
 
+/*
 pub fn hash_alg(algs: &Algorithms) -> HashAlgorithm {
     algs.0
 }
@@ -244,6 +245,7 @@ pub fn psk_mode(algs: &Algorithms) -> bool {
 pub fn zero_rtt(algs: &Algorithms) -> bool {
     algs.5
 }
+*/
 
 // Handshake Data
 pub struct HandshakeData(pub Bytes);
@@ -291,7 +293,7 @@ pub fn lookup_db(
 ) -> Result<(Bytes, SignatureKey, Option<PSK>), TLSError> {
     let ServerDB(server_name, cert, sk, psk_opt) = db;
     if eq(sni, &empty()) || eq(sni, server_name) {
-        match (psk_mode(&algs), tkt, psk_opt) {
+        match (algs.psk_mode, tkt, psk_opt) {
             (true, Some(ctkt), Some((stkt, psk))) => {
                 check_eq(ctkt, stkt)?;
                 Ok((cert.clone(), sk.clone(), Some(psk.clone())))
